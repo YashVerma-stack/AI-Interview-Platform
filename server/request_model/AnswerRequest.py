@@ -5,3 +5,6 @@ class AnswerRequest(BaseModel):
     session_id: str
     answer: Optional[str]
     skip: bool
+    
+    
+    
