@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { APP_CONSTANT } from "../util/constant";
 import StartInterview from "../components/StartInterview";
-import { startInterviewAPI } from "../services/interview";
+import { endInterviewAPI, reportAPI, startInterviewAPI, submitAPI } from "../services/interview";
 import { playAudio } from "../util/audio";
 import Interview from "../components/Interview";
+import { useSpeechToText } from "../hooks/useSpeechToText";
+import Report from "../components/Report";
 
 const InterviewPage = () => {
 
@@ -12,12 +14,76 @@ const InterviewPage = () => {
     const [question, setQuestion] = useState('');
     const [report, setReport] = useState(null);
 
-    const endInterview = () => {
-        // TODO End Interview
+    const onAutoSubmit = async (finalText) => {
+        stopListening();
+        if(!finalText.trim()) {
+            return;
+        }
+
+        // submit response
+        const payload = {
+            "session_id": sessionId,
+            "answer": finalText,
+            "skip": false
+        }
+        const data = await submitAPI(payload);
+
+        if(data.InterviewEnded) {
+            // Report generate
+            finishInterview();
+            
+        } else {
+            // ASk next question
+            setQuestion(data.nextQuestion);
+            setStatus(APP_CONSTANT.ASKING);
+        }
     }
 
-    const skipQuestion = () => {
+    const {startListening, stopListening} = useSpeechToText(onAutoSubmit);
+
+    const finishInterview = async () => {
+        setStatus(APP_CONSTANT.COMPLETED);
+        // call report endpoint
+        const data = await reportAPI(sessionId);
+
+        if(!data) {
+            return;
+        }
+
+        setReport(data.result);
+    }
+
+    const endInterview = async () => {
+        // TODO End Interview
+        stopListening();
+
+        // call end endpoint
+        await endInterviewAPI(sessionId);
+        await finishInterview();
+
+    }
+
+    const skipQuestion = async () => {
         // TODO skip question
+        stopListening();
+                // submit response
+        const payload = {
+            "session_id": sessionId,
+            "answer": "",
+            "skip": true
+        }
+        const data = await submitAPI(payload);
+
+        if(data.InterviewEnded) {
+            // Report generate
+            finishInterview();
+            
+        } else {
+            // ASk next question
+            setQuestion(data.nextQuestion);
+            setStatus(APP_CONSTANT.ASKING);
+        }
+
     }
 
     useEffect(() => {
@@ -25,7 +91,7 @@ const InterviewPage = () => {
         playAudio(question, () => {
             setStatus(APP_CONSTANT.LISTENING);
 
-            // todo stt
+            startListening();
         })
       }
     }, [status, question])
@@ -56,6 +122,8 @@ const InterviewPage = () => {
         {status === APP_CONSTANT.IDLE && <StartInterview onClick={startInterview} />}
 
         {(status === APP_CONSTANT.ASKING || status === APP_CONSTANT.LISTENING) && <Interview skipQuestion={skipQuestion} endInterview={endInterview} />}
+
+        {status === APP_CONSTANT.COMPLETED && <Report report={report} />}
     </>
 }
 

@@ -6,21 +6,21 @@
 import { useEffect, useRef, useState } from "react"
 
 export const useSpeechToText = (onSilence) => {
-    const recognitionRef = useRef('');
-    const silenceTimeRef = useRef('');
+    const recognitionRef = useRef(null);
+    const silenceTimeRef = useRef(null);
     const onSilenceRef = useRef(onSilence);
     const transcriptRef = useRef('');
     const [transcript, setTranscript] = useState('');
 
     useEffect(() => {
-      onSilenceRef.current = onSilence
+        onSilenceRef.current = onSilence
     }, [onSilence])
 
     useEffect(() => {
-      transcriptRef.current = transcript
+        transcriptRef.current = transcript
     }, [transcript])
-    
-    
+
+
 
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -31,16 +31,16 @@ export const useSpeechToText = (onSilence) => {
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continous = true;
+        recognition.continuous = true;
         recognition.lang = "en-US";
-        recognition.interimResult = true;
+        recognition.interimResults = true;
 
         recognition.onresult = (event) => {
             let finalText = "";
             let interimText = "";
 
-            for (let i = event.resultIndex; i < event.result.length; i++) {
-                const result = event.result[i];
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
                 const transcript = result[0].transcript;
 
                 if (result.isFinal) {
@@ -51,10 +51,14 @@ export const useSpeechToText = (onSilence) => {
             }
 
             if (finalText) {
-                setTranscript(prev => (prev + " " + finalText).trim());
+                const updatedTranscript =
+                    (transcriptRef.current + " " + finalText).trim();
+
+                transcriptRef.current = updatedTranscript;
+                setTranscript(updatedTranscript);
             }
 
-            if(finalText || interimText) {
+            if (finalText || interimText) {
                 resetSilenceTimer();
             }
         }
@@ -64,22 +68,29 @@ export const useSpeechToText = (onSilence) => {
         };
 
         recognition.start();
-        recognition.current = recognition;
-        
+        recognitionRef.current = recognition;
+
     }
 
     const resetSilenceTimer = () => {
 
         clearTimeout(silenceTimeRef.current);
 
-        silenceTimeRef.current  = setTimeout(() => {
+        silenceTimeRef.current = setTimeout(() => {
             onSilenceRef.current(transcriptRef.current);
         }, 3000);
     };
 
     const stopListening = () => {
-        recognitionRef.current?.stop();
         clearTimeout(silenceTimeRef.current);
+
+        const recognition = recognitionRef.current;
+
+        if (recognition && typeof recognition.stop === "function") {
+            recognition.stop();
+        }
+
+        recognitionRef.current = null;
     };
 
     return {
