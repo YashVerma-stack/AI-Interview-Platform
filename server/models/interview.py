@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 from typing import List, Optional
 
@@ -15,7 +15,6 @@ class InterviewSession(BaseModel):
     session_id: str
     questions: List[str]
     status: InterviewStatusEnum = InterviewStatusEnum.IN_PROGRESSS
-    answer: List[Answer] = []
+    answer: List[Answer] = Field(default_factory=list)
     current_index: int = 0
-    
-    
+    introText: str = ""
