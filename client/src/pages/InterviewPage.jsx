@@ -1,130 +1,152 @@
 import { useEffect, useState } from "react";
 import { APP_CONSTANT } from "../util/constant";
 import StartInterview from "../components/StartInterview";
-import { endInterviewAPI, reportAPI, startInterviewAPI, submitAPI } from "../services/interview";
+import { endInterviewAPI, reportAPI, submitAPI } from "../services/interview";
 import { playAudio } from "../util/audio";
 import Interview from "../components/Interview";
 import { useSpeechToText } from "../hooks/useSpeechToText";
 import Report from "../components/Report";
+import "../assets/css/InterviewPage.css";
 
 const InterviewPage = () => {
+  const [sessionId, setSessionId] = useState(null);
+  const [status, setStatus] = useState(APP_CONSTANT.IDLE);
+  const [question, setQuestion] = useState("");
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-    const [sessionId, setSessionId] = useState(null);
-    const [status, setStatus] = useState(APP_CONSTANT.IDLE);
-    const [question, setQuestion] = useState('');
-    const [report, setReport] = useState(null);
-
-    const onAutoSubmit = async (finalText) => {
-        stopListening();
-        if(!finalText.trim()) {
-            return;
-        }
-
-        // submit response
-        const payload = {
-            "session_id": sessionId,
-            "answer": finalText,
-            "skip": false
-        }
-        const data = await submitAPI(payload);
-
-        if(data.InterviewEnded) {
-            // Report generate
-            finishInterview();
-            
-        } else {
-            // ASk next question
-            setQuestion(data.nextQuestion);
-            setStatus(APP_CONSTANT.ASKING);
-        }
+  const onAutoSubmit = async (finalText) => {
+    stopListening();
+    if (!finalText.trim()) {
+      return;
     }
 
-    const {startListening, stopListening} = useSpeechToText(onAutoSubmit);
+    // submit response
+    const payload = {
+      session_id: sessionId,
+      answer: finalText,
+      skip: false,
+    };
+    const data = await submitAPI(payload);
 
-    const finishInterview = async () => {
-        setStatus(APP_CONSTANT.COMPLETED);
-        // call report endpoint
-        const data = await reportAPI(sessionId);
-
-        if(!data) {
-            return;
-        }
-
-        setReport(data.result);
+    if (!data) {
+      return;
     }
 
-    const endInterview = async () => {
-        // TODO End Interview
-        stopListening();
-
-        // call end endpoint
-        await endInterviewAPI(sessionId);
-        await finishInterview();
-
+    if (data.interviewEnded) {
+      // Report generate
+      await finishInterview();
+    } else {
+      // ASk next question
+      setQuestion(data.nextQuestion);
+      setStatus(APP_CONSTANT.ASKING);
     }
+  };
 
-    const skipQuestion = async () => {
-        // TODO skip question
-        stopListening();
-                // submit response
-        const payload = {
-            "session_id": sessionId,
-            "answer": "",
-            "skip": true
-        }
-        const data = await submitAPI(payload);
+  const { startListening, stopListening } = useSpeechToText(onAutoSubmit);
 
-        if(data.InterviewEnded) {
-            // Report generate
-            finishInterview();
-            
-        } else {
-            // ASk next question
-            setQuestion(data.nextQuestion);
-            setStatus(APP_CONSTANT.ASKING);
-        }
+  const finishInterview = async () => {
+    setLoading(true);
 
-    }
+    try {
+      const data = await reportAPI(sessionId);
 
-    useEffect(() => {
-      if (status === APP_CONSTANT.ASKING) {
-        playAudio(question, () => {
-            setStatus(APP_CONSTANT.LISTENING);
+      console.log("Report API Response:", data);
 
-            startListening();
-        })
+      if (!data || !data.result) {
+        console.error("Report generation failed");
+        return;
       }
-    }, [status, question])
-    
 
-    const startInterview = async () => {
-        // start Endpoint
-        const data = await startInterviewAPI();
+      setReport(data.result);
+      setStatus(APP_CONSTANT.COMPLETED);
+    } catch (error) {
+      console.error("Error generating report:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        if(!data) {
-            console.log("Something went Wrong");
-            return;
-        }
-        // response sessionId, status, question
-        setSessionId(data.session_id);
-        setQuestion(data.firstQuestion);
+  const endInterview = async () => {
+    // TODO End Interview
+    stopListening();
 
-        setStatus(APP_CONSTANT.INTRO);
+    // call end endpoint
+    await endInterviewAPI(sessionId);
+    await finishInterview();
+  };
 
-        // play Text to Speach
-        const introText = data.introText;
-        playAudio(introText, () => {
-            setStatus(APP_CONSTANT.ASKING)
-        });
+  const skipQuestion = async () => {
+    // TODO skip question
+    stopListening();
+    // submit response
+    const payload = {
+      session_id: sessionId,
+      answer: "",
+      skip: true,
+    };
+    const data = await submitAPI(payload);
+
+    if (!data) {
+      return;
     }
 
-    return <>
-        {status === APP_CONSTANT.IDLE && <StartInterview onClick={startInterview} />}
+    if (data.interviewEnded) {
+      // Report generate
+      finishInterview();
+    } else {
+      // ASk next question
+      setQuestion(data.nextQuestion);
+      setStatus(APP_CONSTANT.ASKING);
+    }
+  };
 
-        {(status === APP_CONSTANT.ASKING || status === APP_CONSTANT.LISTENING) && <Interview skipQuestion={skipQuestion} endInterview={endInterview} />}
+  useEffect(() => {
+    if (status === APP_CONSTANT.ASKING) {
+      playAudio(question, () => {
+        setStatus(APP_CONSTANT.LISTENING);
 
-        {status === APP_CONSTANT.COMPLETED && <Report report={report} />}
+        startListening();
+      });
+    }
+  }, [status, question]);
+
+  const startInterview = async (data, session_id) => {
+    setLoading(true);
+
+    // response sessionId, status, question
+    setSessionId(session_id);
+    setQuestion(data.firstQuestion);
+
+    setStatus(APP_CONSTANT.INTRO);
+
+    // play Text to Speach
+    const introText = data.introText;
+    playAudio(introText, () => {
+      setLoading(false);
+      setStatus(APP_CONSTANT.ASKING);
+    });
+  };
+
+  return (
+    <>
+      {loading && <div className ="loader"></div>}
+      {status === APP_CONSTANT.IDLE && (
+        <StartInterview onClick={startInterview} />
+      )}
+
+      {(status === APP_CONSTANT.ASKING ||
+        status === APP_CONSTANT.LISTENING) && (
+        <Interview
+          skipQuestion={skipQuestion}
+          endInterview={endInterview}
+          state={status}
+        />
+      )}
+
+      {status === APP_CONSTANT.COMPLETED && <Report report={report} />}
     </>
-}
+  );
+};
 
 export default InterviewPage;
