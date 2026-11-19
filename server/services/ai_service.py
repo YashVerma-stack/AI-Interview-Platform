@@ -63,23 +63,22 @@ async def generate_questions_intro(job_title, job_description, resume_text):
 
     return json.loads(response.text)
 
+
 async def generate_report(answers=None):
 
     if answers is None:
         answers = []
+
+    answers_data = [
+        answer.model_dump() for answer in answers
+    ]
 
     SYSTEM_PROMPT = f"""
     You are an expert AI interviewer who evaluates candidate answers
     and provides interview feedback.
 
     Input:
-        {json.dumps([answer.model_dump() for answer in answers])}
-
-    Input structure:
-        answers is an array of objects containing:
-            - question: string
-            - answer: string or None
-            - skip: boolean
+        {json.dumps(answers_data)}
 
     Tasks:
         1. Calculate the candidate's score in percentage.
@@ -88,27 +87,31 @@ async def generate_report(answers=None):
 
     Rules:
         - Do not evaluate answers too strictly.
-        - Consider an answer correct if the candidate has answered
-          at least 70% of the question correctly.
-        - If the candidate skips a question, do not count it as correct.
+        - Consider an answer correct if at least 70% of the question
+          is answered correctly.
+        - Skipped questions are not correct.
         - If the candidate answers nothing, return a score of 0%.
         - Provide no more than 5 improvement areas.
-        - Evaluate answers according to the question asked.
 
-    Return a valid JSON object with exactly these keys:
-        score: string (example: "75%")
+    Return valid JSON with exactly these keys:
+        score: string
         correct_answer: integer
         improvment_area: array of strings
     """
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=SYSTEM_PROMPT,
-        config={
-            "response_mime_type": "application/json"
-        }
-    )
+    try:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=SYSTEM_PROMPT,
+            config={
+                "response_mime_type": "application/json"
+            }
+        )
 
-    return json.loads(response.text)
+        print("Gemini Report Response:", response.text)
 
-    
+        return json.loads(response.text)
+
+    except Exception as error:
+        print("Report Generation Error:", error)
+        raise

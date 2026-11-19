@@ -3,9 +3,9 @@ import axios from "axios";
 
 const BASE_URL = "http://localhost:8000/interview";
 
-export const startInterviewAPI = async () => {
+export const startInterviewAPI = async (sessionId) => {
     try {
-        const response = await axios.get(`${BASE_URL}/start`);
+        const response = await axios.get(`${BASE_URL}/start/${sessionId}`);
         return response.data;
     } catch (error) {
         console.error("Error:", error.response?.data || error.message);
@@ -39,6 +39,25 @@ export const endInterviewAPI = async (sessionId) => {
         return response.data;
     } catch (error) {
         console.error("Error:", error.response?.data || error.message);
+    }
+    return null;
+}
+
+export const generateQuestionAPI = async (formData) => {
+    try {
+        const response = await axios.post(
+            `${BASE_URL}/generate-question`,
+            formData
+        );
+
+        return response.data;
+
+    } catch (error) {
+        console.error(
+            "Error:",
+            error.response?.data || error.message
+        );
+
         return null;
     }
-}
+};
